@@ -65,10 +65,17 @@ async function verifyToken(authHeader: string): Promise<JwtPayload> {
     throw new Error('Not a valid token!')
   }
   try {
-    
-  }
+    const response = await Axios.get(jwksUrl);
+    console.log(response);
+    var verifedToken = verify(token,response.data,{algorithms:['RS256']})
 
-  return undefined
+    console.log('Token was verified!',verifedToken)
+    return  verifedToken as JwtPayload
+  } catch (error) {
+    console.error(error);
+    return undefined
+
+  }
 }
 
 function getToken(authHeader: string): string {

@@ -8,5 +8,9 @@ export const handler: APIGatewayProxyHandler = async (event: APIGatewayProxyEven
   const newTodo: CreateTodoRequest = JSON.parse(event.body)
 
   // TODO: Implement creating a new TODO item
-  return undefined
+  const authHeader = event.headers['Authorization']
+  const userId = getUserId(authHeader)
+  logger.info(`create group for user ${userId} with data ${newTodo}`)
+  const item = await new TodosAccess().createTodo(newTodo,userId)
+  return new ApiResponseHelper().generateDataSuccessResponse(201,'item',item)
 }
