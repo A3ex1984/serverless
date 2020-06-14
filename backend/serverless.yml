@@ -4,10 +4,46 @@ service:
 plugins:
   - serverless-webpack
   - serverless-iam-roles-per-function
+custom:
+  webpack:
+    webpackConfig: ./webpack.config.js
+    includeModules: true
+    packagerOptions:
+      scripts:
+        - rm -rf node_modules/aws-sdk
+
+  documentation:
+    api:
+      info:
+        version: v1.0.0
+        title: ToDO API
+        description: serverless api for ToDo application
+    models:
+      - name: CreateTodo
+        contentType: application/json
+        schema: ${file(validators/create-todo-request.json)}
+      - name: UpdateTodo
+        contentType: application/json
+        schema: ${file(validators/update-todo-request.json)}
+
+
+
+package:
+  individually: true
 
 provider:
   name: aws
-  runtime: nodejs8.10
+  runtime: nodejs12.x
+  apiGateway:
+    minimumCompressionSize: 1024
+
+  environment:
+    TODO_TABLE: todo-${self:provider.stage}
+    IMAGES_BUCKET: udacity-serverless-voets123-todos-${self:provider.stage}
+    AWS_NODEJS_CONNECTION_REUSE_ENABLED: 1
+    USER_ID_INDEX: userId
+    AUTH_0_SECRET_ID: Auth0Secret-${self:provider.stage}
+    AUTH_0_SECRET_FIELD: auth0Secret
 
   stage: ${opt:stage, 'dev'}
   region: ${opt:region, 'us-east-1'}
@@ -24,15 +60,25 @@ functions:
       - http:
           method: get
           path: todos
+          authorizer: Auth
+          cors: true
 
   # TODO: Configure this function
-  GetTodos:
+  # GetTodos:
   CreateTodo:
     handler: src/lambda/http/createTodo.handler
     events:
       - http:
           method: post
           path: todos
+          authorizer: Auth
+          cors: true
+          reqValidatorName: RequestBodyValidator
+          documentation: 
+            summary: create new ToDo Item
+            description: create new ToDo Item
+            requestModels:
+              'application/json': CreateTodo
 
   # TODO: Configure this function
   UpdateTodo:
@@ -41,6 +87,14 @@ functions:
       - http:
           method: patch
           path: todos/{todoId}
+          authorizer: Auth
+          cors: true
+          reqValidatorName: RequestBodyValidator
+          documentation:
+            summary: update a ToDo 
+            description: update a ToDo
+            requestModels:
+              'application/json': UpdateTodo
 
   # TODO: Configure this function
   DeleteTodo:
@@ -49,6 +103,9 @@ functions:
       - http:
           method: delete
           path: todos/{todoId}
+          authorizer: Auth
+          cors: true
+          
 
   # TODO: Configure this function
   GenerateUploadUrl:
@@ -57,7 +114,63 @@ functions:
       - http:
           method: post
           path: todos/{todoId}/attachment
+          authorizer: Auth
+          cors: true
 
 resources:
   Resources:
     # TODO: Add any necessary AWS resources
+    RequestBodyValidator:
+      Type: AWS::ApiGateway::RequestValidator
+      Properties:
+        Name: 'request-body-validator'
+        RestApiId:
+          Ref: 'ApiGatewayRestApi'
+        ValidateRequestBody: true
+        ValidateRequestParameters: false
+    
+    GatewayResponseDefault4XX:
+      Type: AWS::ApiGateway::GatewayResponse
+      Properties:
+        ResponseParameters:
+          gatewayresponse.header.Access-Control-Allow-Origin: "'*''"
+          gatewayresponse.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization'"
+          gatewayresponse.header.Access-Control-Allow-Methods: "'GET,OPTIONS,POST'"
+        ResponseType: DEFAULT_4XX
+        RestApiId:
+          Ref: 'ApiGatewayRestApi'
+    TodoDynamoDbTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        AttributeDefinitions:
+          - AttributeName: todoId
+            AttributeType: S
+          - AttributeName: userId
+            AttributeType: S
+        KeySchema:
+          - AttributeName: todoId
+            KeyType: HASH
+        GlobalSecondaryIndexes:
+          - IndexName: ${self:provider.environment.USER_ID_INDEX}
+            KeySchema:
+            - AttributeName: userId
+              KeyType: HASH
+            Projection:
+              ProjectionType: ALL
+        BillingMode: PAY_PER_REQUEST
+        TableName: ${self:provider.environment.TODO_TABLE}
+    TodoBucket:
+      Type: AWS::S3::Bucket
+      Properties:
+        BucketName: ${self:provider.environment.IMAGES_BUCKET}
+        CorsConfiguration:
+          CorsRules:
+            - AllowedHeaders:
+                - "*"
+              AllowedMethods:
+                - GET
+                - POST
+                - PUT
+              AllowedOrigins:
+                - "*"
+  
