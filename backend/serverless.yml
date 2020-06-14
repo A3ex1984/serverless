@@ -4,10 +4,46 @@ service:
 plugins:
   - serverless-webpack
   - serverless-iam-roles-per-function
+custom:
+  webpack:
+    webpackConfig: ./webpack.config.js
+    includeModules: true
+    packagerOptions:
+      scripts:
+        - rm -rf node_modules/aws-sdk
+
+  documentation:
+    api:
+      info:
+        version: v1.0.0
+        title: ToDO API
+        description: serverless api for ToDo application
+    models:
+      - name: CreateTodo
+        contentType: application/json
+        schema: ${file(validators/create-todo-request.json)}
+      - name: UpdateTodo
+        contentType: application/json
+        schema: ${file(validators/update-todo-request.json)}
+
+
+
+package:
+  individually: true
 
 provider:
   name: aws
-  runtime: nodejs8.10
+  runtime: nodejs12.x
+  apiGateway:
+    minimumCompressionSize: 1024
+
+  environment:
+    TODO_TABLE: todo-${self:provider.stage}
+    IMAGES_BUCKET: udacity-serverless-voets123-todos-${self:provider.stage}
+    AWS_NODEJS_CONNECTION_REUSE_ENABLED: 1
+    USER_ID_INDEX: userId
+    AUTH_0_SECRET_ID: Auth0Secret-${self:provider.stage}
+    AUTH_0_SECRET_FIELD: auth0Secret
 
   stage: ${opt:stage, 'dev'}
   region: ${opt:region, 'us-east-1'}
